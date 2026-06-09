@@ -10,7 +10,7 @@ import {
   H6Plugin,
   HorizontalRulePlugin,
   ItalicPlugin,
-  StrikethroughPlugin,
+  StrikethroughPlugin
 } from '@platejs/basic-nodes/react'
 import { CodeBlockPlugin, CodeLinePlugin, CodeSyntaxPlugin } from '@platejs/code-block/react'
 import { LinkPlugin } from '@platejs/link/react'
@@ -20,26 +20,34 @@ import {
   ListItemPlugin,
   ListPlugin,
   NumberedListPlugin,
-  TaskListPlugin,
+  TaskListPlugin
 } from '@platejs/list-classic/react'
 import {
   TableCellHeaderPlugin,
   TableCellPlugin,
   TablePlugin,
-  TableRowPlugin,
+  TableRowPlugin
 } from '@platejs/table/react'
 import { MarkdownPlugin } from '@platejs/markdown'
 import { DndPlugin } from '@platejs/dnd'
+import remarkGfm from 'remark-gfm'
 import { DndProvider } from 'react-dnd'
 import { HTML5Backend } from 'react-dnd-html5-backend'
 
-import { H1Element, H2Element, H3Element, H4Element, H5Element, H6Element } from '@/components/ui/heading-node'
+import {
+  H1Element,
+  H2Element,
+  H3Element,
+  H4Element,
+  H5Element,
+  H6Element
+} from '@/components/ui/heading-node'
 import { BlockquoteElement } from '@/components/ui/blockquote-node'
 import {
   CodeBlockElement,
   CodeBlockElementStatic,
   CodeLineElement,
-  CodeSyntaxLeaf,
+  CodeSyntaxLeaf
 } from '@/components/ui/code-block-node'
 import { LinkElement } from '@/components/ui/link-node'
 import { LinkFloatingToolbar } from '@/components/ui/link-toolbar'
@@ -49,13 +57,13 @@ import {
   BulletedListElement,
   ListItemElement,
   NumberedListElement,
-  TaskListElement,
+  TaskListElement
 } from '@/components/ui/list-classic-node'
 import {
   TableElement,
   TableCellElement,
   TableCellHeaderElement,
-  TableRowElement,
+  TableRowElement
 } from '@/components/ui/table-node'
 
 /**
@@ -75,8 +83,8 @@ import {
 const DndPluginConfigured = DndPlugin.configure({
   options: { enableScroller: true },
   render: {
-    aboveSlate: ({ children }) => <DndProvider backend={HTML5Backend}>{children}</DndProvider>,
-  },
+    aboveSlate: ({ children }) => <DndProvider backend={HTML5Backend}>{children}</DndProvider>
+  }
 })
 
 export function getSharedPlatePlugins(
@@ -92,13 +100,13 @@ export function getSharedPlatePlugins(
   // we don't pull in hook-based popover machinery during static rendering.
   const linkPluginConfigured = exportMode
     ? LinkPlugin.configure({
-        render: { node: LinkElement },
+        render: { node: LinkElement }
       })
     : LinkPlugin.configure({
         render: {
           node: LinkElement,
-          afterEditable: () => <LinkFloatingToolbar />,
-        },
+          afterEditable: () => <LinkFloatingToolbar />
+        }
       })
 
   return [
@@ -132,14 +140,19 @@ export function getSharedPlatePlugins(
     ListItemPlugin.withComponent(ListItemElement),
     // Tables
     TablePlugin.configure({
-      node: { component: TableElement },
+      node: { component: TableElement }
     }),
     TableRowPlugin.withComponent(TableRowElement),
     TableCellPlugin.withComponent(TableCellElement),
     TableCellHeaderPlugin.withComponent(TableCellHeaderElement),
     // Markdown serialization
-    MarkdownPlugin,
+    MarkdownPlugin.configure({
+      options: {
+        // Enable GitHub Flavored Markdown (tables, task lists, strikethrough, autolinks).
+        remarkPlugins: [remarkGfm]
+      }
+    }),
     // DnD (edit-time only) — conditionally included via spread
-    ...(includeDnd ? [DndPluginConfigured] : []),
+    ...(includeDnd ? [DndPluginConfigured] : [])
   ]
 }

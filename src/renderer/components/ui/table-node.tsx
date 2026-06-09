@@ -648,7 +648,7 @@ export const TableElement = withHOC(
       );
     }, [colSizes, props.element]);
     const tableVariableStyle = React.useMemo(() => {
-      if (resolvedColSizes.length === 0) {
+      if (readOnly || resolvedColSizes.length === 0) {
         return;
       }
 
@@ -660,17 +660,19 @@ export const TableElement = withHOC(
           ])
         ),
       } as React.CSSProperties;
-    }, [resolvedColSizes]);
-    const tableStyle = React.useMemo(
-      () =>
-        ({
-          width: `${
-            resolvedColSizes.reduce((total, colSize) => total + colSize, 0) +
-            controlColumnWidth
-          }px`,
-        }) as React.CSSProperties,
-      [controlColumnWidth, resolvedColSizes]
-    );
+    }, [readOnly, resolvedColSizes]);
+    const tableStyle = React.useMemo(() => {
+      if (readOnly) {
+        return;
+      }
+
+      return {
+        width: `${
+          resolvedColSizes.reduce((total, colSize) => total + colSize, 0) +
+          controlColumnWidth
+        }px`,
+      } as React.CSSProperties;
+    }, [controlColumnWidth, readOnly, resolvedColSizes]);
 
     const isSelectingTable = useBlockSelected(props.element.id as string);
 
@@ -678,7 +680,8 @@ export const TableElement = withHOC(
       <PlateElement
         {...props}
         className={cn(
-          'overflow-x-auto py-5',
+          'py-5',
+          readOnly ? 'overflow-x-hidden' : 'overflow-x-auto',
           hasControls && '-ml-2 *:data-[slot=block-selection]:left-2'
         )}
         style={{ paddingLeft: marginLeft }}
@@ -686,7 +689,7 @@ export const TableElement = withHOC(
         <TableResizeContext.Provider value={resizeController}>
           <div
             ref={wrapperRef}
-            className="group/table relative w-fit"
+            className={cn('group/table relative', readOnly ? 'w-full' : 'w-fit')}
             style={tableVariableStyle}
           >
             <div
@@ -702,7 +705,8 @@ export const TableElement = withHOC(
             <table
               ref={tableRef}
               className={cn(
-                'mr-0 ml-px table h-px table-fixed border-collapse',
+                'table h-px border-collapse',
+                readOnly ? 'mx-0 w-[calc(100%-2px)] table-auto text-sm' : 'mr-0 ml-px table-fixed',
                 'data-[table-selecting=true]:[&_*::selection]:!bg-transparent',
                 'data-[table-selecting=true]:[&_*::selection]:!text-inherit',
                 'data-[table-selecting=true]:[&_*::-moz-selection]:!bg-transparent',
@@ -712,7 +716,7 @@ export const TableElement = withHOC(
               style={tableStyle}
               {...tableProps}
             >
-              {resolvedColSizes.length > 0 && (
+              {!readOnly && resolvedColSizes.length > 0 && (
                 <colgroup>
                   {hasControls && (
                     <col
@@ -1297,13 +1301,20 @@ export function TableCellElement({
 
   const { borders, colIndex, colSpan, rowIndex, rowSpan, width } =
     useTableCellPresentation(element);
+  const cellSizingStyle = readOnly
+    ? undefined
+    : ({
+        maxWidth: width,
+        minWidth: width,
+      } as React.CSSProperties);
 
   return (
     <PlateElement
       {...props}
       as={isHeader ? 'th' : 'td'}
       className={cn(
-        'relative h-full overflow-visible border-none bg-background p-0',
+        'relative h-full overflow-visible bg-background p-0 align-top',
+        readOnly ? 'border border-border/70' : 'border-none',
         element.background ? 'bg-(--cellBackground)' : 'bg-background',
         isHeader && 'text-left *:m-0',
         'before:size-full',
@@ -1318,8 +1329,7 @@ export function TableCellElement({
       style={
         {
           '--cellBackground': element.background,
-          maxWidth: width,
-          minWidth: width,
+          ...cellSizingStyle,
         } as React.CSSProperties
       }
       attributes={{
@@ -1330,7 +1340,10 @@ export function TableCellElement({
       }}
     >
       <div
-        className="relative z-20 box-border h-full px-3 py-2"
+        className={cn(
+          'relative z-20 box-border h-full px-3 py-2',
+          readOnly && 'whitespace-normal break-normal leading-relaxed'
+        )}
         style={
           rowSpan === 1
             ? { minHeight: 'var(--tableRowMinHeight, 0px)' }
