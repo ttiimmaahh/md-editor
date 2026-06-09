@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.5 — Markdown Table Rendering
+
+### Fixed
+
+- **Course Markdown tables now render as tables** — enabled GitHub Flavored Markdown parsing in the shared Plate markdown pipeline, so pipe tables in lessons no longer appear as raw `|`-delimited text.
+- **Learner table layout is more readable** — read-only/course tables now use markdown-viewer-style fluid sizing instead of the editor's fixed-width resize columns, avoiding cramped 120px columns and unnecessary horizontal scrollbars for normal tables.
+
+### Under the Hood
+
+- Added `remark-gfm` and configured `MarkdownPlugin` with `remarkPlugins: [remarkGfm]`.
+- `LessonReader` now reuses `getSharedPlatePlugins({ includeDnd: false })`, keeping learner rendering aligned with the editor/export plugin pipeline.
+- Added a regression test covering GFM pipe-table deserialization into Plate table nodes.
+
+---
+
 ## v0.2.4 — Document & Course Export
 
 Praxis can now export your work to HTML and PDF — whether it's a single Markdown file or an entire course.
