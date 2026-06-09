@@ -2,6 +2,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
 
@@ -9,7 +10,103 @@ permissions:
   contents: write
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      should_release: ${{ steps.release.outputs.should_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            TAG="$REF_NAME"
+          else
+            VERSION="$(node -p "require('./package.json').version")"
+            LOCK_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+            TAG="v$VERSION"
+
+            if [[ "$VERSION" != "$LOCK_VERSION" ]]; then
+              echo "error: package.json version ($VERSION) does not match package-lock.json version ($LOCK_VERSION)" >&2
+              exit 1
+            fi
+          fi
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "error: tag '$TAG' does not match expected vMAJOR.MINOR.PATCH format" >&2
+            exit 1
+          fi
+
+          if ! grep -qE "^## ${TAG//./\.}( |$|—|-|–)" CHANGELOG.md; then
+            echo "error: CHANGELOG.md is missing a section heading for $TAG" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; skipping release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+
+          # The tag push starts the real release workflow. Skip this branch-push
+          # run to avoid building and publishing the same version twice.
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
+
+  release-notes:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build release notes from CHANGELOG.md
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: ./scripts/build-release-notes.sh "$TAG" > release-notes.md
+
+      - name: Create or update draft release notes
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --notes-file release-notes.md || true
+          fi
+
+          gh release edit "$TAG" \
+            --draft \
+            --title "$TAG" \
+            --notes-file release-notes.md
+
   build:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
     strategy:
       matrix:
         include:
@@ -24,12 +121,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -47,33 +144,3 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-  release-notes:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate tag format
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "error: tag '$TAG' does not match expected vMAJOR.MINOR.PATCH format" >&2
-            exit 1
-          fi
-
-      - name: Build release notes from CHANGELOG.md
-        env:
-          TAG: ${{ github.ref_name }}
-        run: ./scripts/build-release-notes.sh "$TAG" > release-notes.md
-
-      - name: Apply release notes to draft release
-        env:
-          TAG: ${{ github.ref_name }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release edit "$TAG" \
-            --title "$TAG" \
-            --notes-file release-notes.md
